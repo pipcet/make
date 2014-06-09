@@ -1,0 +1,20 @@
+checktime: Standard make works very well in environments where
+multiple dependencies result in a single target; if any of the
+dependencies change, we re-build the target, and that's good.
+
+It doesn't work so well in environments where one dependency results
+in multiple targets: even if only one target changed, everything that
+depends on any of the targets is re-built.
+
+To work around this, one approach is to avoid touching the mtime of
+those targets that haven't changed, using some sort of cpifchanged
+semantics. However, make then thinks the unchanged targets still need
+updating whenever it is restarted.
+
+The approach to solving that problem here is to keep two timestamps
+for each file: the mtime, the time when the file was last modified on
+disk, and the checktime, the time we last convinced ourselves no
+rebuilding was necessary. If any of the dependencies is newer than the
+checktime, the target gets remade, but dependencies older than the
+checktime do not cause the target to be remade, even if they're newer
+than the target's mtime.
