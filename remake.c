@@ -417,6 +417,7 @@ update_file_1 (struct file *file, unsigned int depth)
 {
   enum update_status dep_status = us_success;
   FILE_TIMESTAMP this_mtime;
+  FILE_TIMESTAMP this_checktime;
   int noexist, must_make, deps_changed;
   struct file *ofile;
   struct dep *d, *ad;
@@ -481,6 +482,7 @@ update_file_1 (struct file *file, unsigned int depth)
      to have that name replaced with another found by VPATH search.  */
 
   this_mtime = file_mtime (file);
+  this_checktime = file->last_checktime;
   check_renamed (file);
   noexist = this_mtime == NONEXISTENT_MTIME;
   if (noexist)
@@ -570,7 +572,7 @@ update_file_1 (struct file *file, unsigned int depth)
               d->file->dontcare = file->dontcare;
             }
 
-          new = check_dep (d->file, depth, this_mtime, &maybe_make);
+          new = check_dep (d->file, depth, this_checktime, &maybe_make);
           if (new > dep_status)
             dep_status = new;
 
@@ -720,8 +722,10 @@ update_file_1 (struct file *file, unsigned int depth)
   for (d = file->deps; d != 0; d = d->next)
     {
       FILE_TIMESTAMP d_mtime = file_mtime (d->file);
+      FILE_TIMESTAMP d_checktime = d->file->last_checktime;
       check_renamed (d->file);
 
+      fprintf(stderr, "d_mtime %lld checktime %lld %d %d\n", (long long)d_mtime, (long long)this_checktime, d_mtime > this_checktime, must_make);
       if (! d->ignore_mtime)
         {
 #if 1
@@ -740,7 +744,8 @@ update_file_1 (struct file *file, unsigned int depth)
 
       /* Set D->changed if either this dep actually changed,
          or its dependent, FILE, is older or does not exist.  */
-      d->changed |= noexist || d_mtime > this_mtime;
+      fprintf(stderr, "d_mtime %lld checktime %lld %d %d\n", (long long)d_mtime, (long long)this_checktime, d_mtime > this_checktime, must_make);
+      d->changed |= noexist || d_mtime > this_checktime;
 
       if (!noexist && ISDB (DB_BASIC|DB_VERBOSE))
         {
@@ -1432,6 +1437,8 @@ f_mtime (struct file *file, int search)
         file->intermediate = 0;
 
       file->last_mtime = mtime;
+      if (file->last_checktime == UNKNOWN_MTIME)
+	file->last_checktime = mtime;
       file = file->prev;
     }
   while (file != 0);

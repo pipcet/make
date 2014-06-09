@@ -2174,6 +2174,23 @@ func_file (char *o, char **argv, const char *funcname UNUSED)
 }
 
 static char *
+func_checktime (char *o, char **argv, const char *funcname UNUSED)
+{
+  char *file_str = strcache_add(argv[0]);
+  char *checktime_str = argv[1];
+
+  uintmax_t checktime = file_timestamp_cons (file_str, (time_t)atoll(checktime_str), 0);
+
+  struct file *file = enter_file(file_str);
+
+  if (file) {
+    file->last_checktime = checktime;
+  }
+
+  return o;
+}
+
+static char *
 func_abspath (char *o, char **argv, const char *funcname UNUSED)
 {
   /* Expand the argument.  */
@@ -2268,6 +2285,7 @@ static struct function_table_entry function_table_init[] =
   FT_ENTRY ("eq",            2,  2,  1,  func_eq),
   FT_ENTRY ("not",           0,  1,  1,  func_not),
 #endif
+  FT_ENTRY ("checktime",     2,  2,  1,  func_checktime),
 };
 
 #define FUNCTION_TABLE_ENTRIES (sizeof (function_table_init) / sizeof (struct function_table_entry))

@@ -58,6 +58,8 @@ struct file
     FILE_TIMESTAMP last_mtime;  /* File's modtime, if already known.  */
     FILE_TIMESTAMP mtime_before_update; /* File's modtime before any updating
                                            has been performed.  */
+    FILE_TIMESTAMP last_checktime;
+    FILE_TIMESTAMP checktime_before_update; /* XXX needed? */
     int command_flags;          /* Flags OR'd in for cmds; see commands.h.  */
     enum update_status          /* Status of the last attempt to update.  */
       {
