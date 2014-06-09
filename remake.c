@@ -725,7 +725,6 @@ update_file_1 (struct file *file, unsigned int depth)
       FILE_TIMESTAMP d_checktime = d->file->last_checktime;
       check_renamed (d->file);
 
-      fprintf(stderr, "d_mtime %lld checktime %lld %d %d\n", (long long)d_mtime, (long long)this_checktime, d_mtime > this_checktime, must_make);
       if (! d->ignore_mtime)
         {
 #if 1
@@ -744,7 +743,6 @@ update_file_1 (struct file *file, unsigned int depth)
 
       /* Set D->changed if either this dep actually changed,
          or its dependent, FILE, is older or does not exist.  */
-      fprintf(stderr, "d_mtime %lld checktime %lld %d %d\n", (long long)d_mtime, (long long)this_checktime, d_mtime > this_checktime, must_make);
       d->changed |= noexist || d_mtime > this_checktime;
 
       if (!noexist && ISDB (DB_BASIC|DB_VERBOSE))
