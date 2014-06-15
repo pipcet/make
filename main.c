@@ -1259,6 +1259,7 @@ main (int argc, char **argv, char **envp)
 #ifdef MAKE_LOAD
                            " load"
 #endif
+                           " checktime"
                            ;
 
     define_variable_cname (".FEATURES", features, o_default, 0);
