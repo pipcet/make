@@ -695,6 +695,52 @@ func_addsuffix_addprefix (char *o, char **argv, const char *funcname)
   return o;
 }
 
+static int
+cart_rec (char **o, size_t n, size_t *len, const char **p, const char **list_iterator,
+	  char **argv, size_t k)
+{
+  if (k == n)
+    {
+      for (size_t i = 0; i < n; i++)
+	*o = variable_buffer_output (*o, p[i], len[i]);
+      *o = variable_buffer_output (*o, " ", 1);
+      return 1;
+    }
+  else
+    {
+      int ret = 0;
+      list_iterator[k] = argv[k];
+      while ((p[k] = find_next_token(list_iterator + k, len + k)) != 0)
+	{
+	  ret |= cart_rec (o, n, len, p, list_iterator, argv, k + 1);
+	}
+      return ret;
+    }
+}
+
+static char *
+func_cart (char *o, char **argv, const char *funcname UNUSED)
+{
+  size_t n = 0;
+
+  while (argv[n])
+    n++;
+
+  {
+    size_t len[n];
+    const char *list_iterator[n];
+    const char *p[n];
+    int doneany;
+
+    doneany = cart_rec (&o, n, len, p, list_iterator, argv, 0);
+
+    if (doneany)
+      --o;
+
+    return o;
+  }
+}
+
 static char *
 func_subst (char *o, char **argv, const char *funcname UNUSED)
 {
@@ -2409,6 +2455,7 @@ static struct function_table_entry function_table_init[] =
   FT_ENTRY ("abspath",       0,  1,  1,  func_abspath),
   FT_ENTRY ("addprefix",     2,  2,  1,  func_addsuffix_addprefix),
   FT_ENTRY ("addsuffix",     2,  2,  1,  func_addsuffix_addprefix),
+  FT_ENTRY ("cart",          0,  0,  1,  func_cart),
   FT_ENTRY ("basename",      0,  1,  1,  func_basename_dir),
   FT_ENTRY ("dir",           0,  1,  1,  func_basename_dir),
   FT_ENTRY ("notdir",        0,  1,  1,  func_notdir_suffix),
