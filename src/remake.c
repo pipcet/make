@@ -428,8 +428,27 @@ update_file_1 (struct file *file, unsigned int depth)
   struct dep *d, *ad;
   struct dep amake;
   int running = 0;
+  char *lastslash;
 
   DBF (DB_VERBOSE, _("Considering target file '%s'.\n"));
+
+  if ((lastslash = strrchr (file->name, '/')))
+    {
+      char *path = strdup (file->name);
+
+      while ((lastslash = strrchr (path, '/')))
+	{
+	  struct file *f;
+	  lastslash[0] = 0;
+	  f = lookup_file (strcache_add (strdup(path)));
+	  if (f)
+	    {
+	      enum update_status parent_status = update_file_1 (f, depth + 1);
+	      if (parent_status != us_success)
+		return parent_status;
+	    }
+	}
+    }
 
   if (file->updated)
     {
