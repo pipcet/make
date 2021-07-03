@@ -461,7 +461,6 @@ remove_intermediates_according_to_rule (struct rule *rule, const char *stem, siz
 static int
 remove_intermediate (struct file *f, int sig)
 {
-  struct file *teardown = f->teardown;
   int doneany = 0;
   if (f->intermediate && (f->dontcare || !f->precious)
       && !f->secondary && !f->cmd_target)
