@@ -464,12 +464,12 @@ freerule (struct rule *rule, struct rule *lastrule)
     last_pattern_rule = lastrule;
 }
 
-/* Create a new pattern rule with the targets in the nil-terminated array
-   TARGETS.  TARGET_PERCENTS is an array of pointers to the % in each element
-   of TARGETS.  N is the number of items in the array (not counting the nil
-   element).  The new rule has dependencies DEPS and commands from COMMANDS.
-   It is a terminal rule if TERMINAL is nonzero.  This rule overrides
-   identical rules with different commands if OVERRIDE is nonzero.
+/* Create a new pattern rule with the targets in the array TARGETS.
+   TARGET_PERCENTS is an array of pointers to the % in each element of
+   TARGETS.  N is the number of items in the array.  The new rule has
+   dependencies DEPS and commands from COMMANDS.  It is a terminal
+   rule if TERMINAL is nonzero.  This rule overrides identical rules
+   with different commands if OVERRIDE is nonzero.
 
    The storage for TARGETS and its elements and TARGET_PERCENTS is used and
    must not be freed until the rule is destroyed.  */

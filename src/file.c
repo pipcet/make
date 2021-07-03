@@ -25,6 +25,7 @@ this program.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "variable.h"
 #include "debug.h"
 #include "hash.h"
+#include "rule.h"
 
 
 /* Remember whether snap_deps has been invoked: we need this to be sure we
@@ -356,6 +357,181 @@ rename_file (struct file *from_file, const char *to_hname)
     }
 }
 
+static int
+match_percent (const char *pattern, const char *name, const char **stemp, size_t *stem_n)
+{
+  size_t np = strlen (pattern);
+  size_t nn = strlen (name);
+  size_t i0, i1;
+  for (i0 = 0; i0 < np; i0++)
+    {
+      *stemp = name + i0;
+      if (pattern[i0] == '%')
+	break;
+      if (pattern[i0] != name[i0])
+	return 0;
+    }
+
+  *stem_n = nn - i0;
+  for (i1 = 0; i1 < np && i1 < nn; i1++)
+    {
+      if (pattern[np - 1 - i1] == '%')
+	break;
+      if (pattern[np - 1 - i1] != name[nn - 1 - i1])
+	return 0;
+      (*stem_n)--;
+    }
+
+  return 1;
+}
+
+static int
+remove_intermediates_according_to_rule (struct rule *rule, const char *stem, size_t stem_n)
+{
+  struct dep *dep;
+  struct dep *new_deps = NULL;
+  char *path;
+  struct file * teardown;
+
+  for (dep = rule->deps; dep; dep = dep->next)
+    {
+      char *percent = strchr (dep->name, '%');
+      struct file *f;
+      if (!percent)
+	path = strdup (dep->name);
+      else
+	{
+
+	  asprintf (&path, "%.*s%.*s%s",
+		    (int)(percent - dep->name), dep->name,
+		    (int)(stem_n), stem,
+		    percent + 1);
+	}
+
+      fprintf (stderr, "path is %s\n", path);
+
+      f = lookup_file (path);
+
+      if (!f)
+	{
+	  free (path);
+	  return 0;
+	}
+
+      if (f->intermediate && (f->dontcare || !f->precious)
+	  && !f->secondary && !f->cmd_target)
+	{
+	  struct dep *new_dep = alloc_dep ();
+	  new_dep->name = f->name;
+	  new_dep->file = f;
+	  new_dep->next = new_deps;
+	  new_deps = new_dep;
+	}
+      else
+	{
+	  while (new_deps)
+	    {
+	      struct dep *new_dep = new_deps;
+	      new_deps = new_dep->next;
+	      free (new_dep);
+	    }
+	  free (path);
+	  return 0;
+	}
+    }
+
+  teardown = xcalloc (sizeof (struct file));
+  teardown->name = path;
+  teardown->deps = new_deps;
+  teardown->cmds = rule->cmds;
+  execute_file_commands (teardown);
+
+  while (new_deps)
+    {
+      struct dep *new_dep = new_deps;
+      new_deps = new_dep->next;
+      free (new_dep);
+    }
+  free (teardown);
+  free (path);
+
+  return 0;
+}
+
+static int
+remove_intermediate (struct file *f, int sig)
+{
+  struct file *teardown = f->teardown;
+  int doneany = 0;
+  if (f->intermediate && (f->dontcare || !f->precious)
+      && !f->secondary && !f->cmd_target)
+    {
+      struct rule *rule;
+      struct dep *dep;
+      for (rule = pattern_rules; rule; rule = rule->next)
+	{
+	  const char *stem;
+	  size_t stem_n;
+	  if (rule->num)
+	    continue;
+
+	  for (dep = rule->deps; dep; dep = dep->next)
+	    {
+	      if (match_percent (dep->name, f->name, &stem, &stem_n))
+		if (remove_intermediates_according_to_rule (rule, stem, stem_n))
+		  return 1;
+	    }
+	}
+    }
+  if (f->intermediate && (f->dontcare || !f->precious)
+      && !f->secondary && !f->cmd_target)
+    {
+      int status;
+      if (f->update_status == us_none)
+	/* If nothing would have created this file yet,
+	   don't print an "rm" command for it.  */
+	return 0;
+      if (just_print_flag)
+	status = 0;
+      else
+	{
+	  status = unlink (f->name);
+	  if (status < 0 && errno == ENOENT)
+	    return 0;
+	}
+      if (!f->dontcare)
+	{
+	  if (sig)
+	    OS (error, NILF,
+		_("*** Deleting intermediate file '%s'"), f->name);
+	  else
+	    {
+	      if (! doneany)
+		DB (DB_BASIC, (_("Removing intermediate files...\n")));
+	      if (!run_silent)
+		{
+		  if (! doneany)
+		    {
+		      fputs ("rm ", stdout);
+		      doneany = 1;
+		    }
+		  else
+		    putchar (' ');
+		  fputs (f->name, stdout);
+		  fflush (stdout);
+		}
+	    }
+	  if (status < 0)
+	    {
+	      perror_with_name ("\nunlink: ", f->name);
+	      /* Start printing over.  */
+	      doneany = 0;
+	    }
+	}
+    }
+  return doneany;
+}
+
 /* Remove all nonprecious intermediate files.
    If SIG is nonzero, this was caused by a fatal signal,
    meaning that a different message will be printed, and
@@ -381,56 +557,7 @@ remove_intermediates (int sig)
     if (! HASH_VACANT (*file_slot))
       {
         struct file *f = *file_slot;
-        /* Is this file eligible for automatic deletion?
-           Yes, IFF: it's marked intermediate, it's not secondary, it wasn't
-           given on the command line, and it's either a -include makefile or
-           it's not precious.  */
-        if (f->intermediate && (f->dontcare || !f->precious)
-            && !f->secondary && !f->cmd_target)
-          {
-            int status;
-            if (f->update_status == us_none)
-              /* If nothing would have created this file yet,
-                 don't print an "rm" command for it.  */
-              continue;
-            if (just_print_flag)
-              status = 0;
-            else
-              {
-                status = unlink (f->name);
-                if (status < 0 && errno == ENOENT)
-                  continue;
-              }
-            if (!f->dontcare)
-              {
-                if (sig)
-                  OS (error, NILF,
-                      _("*** Deleting intermediate file '%s'"), f->name);
-                else
-                  {
-                    if (! doneany)
-                      DB (DB_BASIC, (_("Removing intermediate files...\n")));
-                    if (!run_silent)
-                      {
-                        if (! doneany)
-                          {
-                            fputs ("rm ", stdout);
-                            doneany = 1;
-                          }
-                        else
-                          putchar (' ');
-                        fputs (f->name, stdout);
-                        fflush (stdout);
-                      }
-                  }
-                if (status < 0)
-                  {
-                    perror_with_name ("\nunlink: ", f->name);
-                    /* Start printing over.  */
-                    doneany = 0;
-                  }
-              }
-          }
+	doneany += remove_intermediate (f, sig);
       }
 
   if (doneany && !sig)
@@ -991,6 +1118,15 @@ print_prereqs (const struct dep *deps)
 }
 
 static void
+print_teardown (const struct file *f)
+{
+  printf ("# Teardown file rule\n");
+  printf (":");
+  print_prereqs (f->deps);
+  print_commands (f->cmds);
+}
+
+static void
 print_file (const void *item)
 {
   const struct file *f = item;
@@ -1098,6 +1234,9 @@ print_file (const void *item)
 
   if (f->cmds != 0)
     print_commands (f->cmds);
+
+  if (f->teardown != 0)
+    print_teardown (f->teardown);
 
   if (f->prev)
     print_file ((const void *) f->prev);

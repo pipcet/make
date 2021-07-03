@@ -33,6 +33,7 @@ struct file
     const char *vpath;          /* VPATH/vpath pathname */
     struct dep *deps;           /* all dependencies, including duplicates */
     struct commands *cmds;      /* Commands to execute for this target.  */
+    struct file *teardown;
     const char *stem;           /* Implicit stem, if an implicit
                                    rule has been used */
     struct dep *also_make;      /* Targets that are made by making this.  */

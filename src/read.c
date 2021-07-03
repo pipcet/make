@@ -573,7 +573,6 @@ eval (struct ebuffer *ebuf, int set_default)
   size_t commands_idx = 0;
   unsigned int cmds_started, tgts_started;
   int ignoring = 0, in_ignored_define = 0;
-  int no_targets = 0;           /* Set when reading a rule without targets.  */
   int also_make_targets = 0;    /* Set when reading grouped targets. */
   struct nameseq *filenames = 0;
   char *depstr = 0;
@@ -585,23 +584,19 @@ eval (struct ebuffer *ebuf, int set_default)
   floc *fstart;
   floc fi;
 
-#define record_waiting_files()                                                \
-  do                                                                          \
-    {                                                                         \
-      if (filenames != 0)                                                     \
-        {                                                                     \
-          fi.lineno = tgts_started;                                           \
-          fi.offset = 0;                                                      \
-          record_files (filenames, also_make_targets, pattern,                \
-                        pattern_percent, depstr,                              \
-                        cmds_started, commands, commands_idx, two_colon,      \
-                        prefix, &fi);                                         \
-          filenames = 0;                                                      \
-        }                                                                     \
-      commands_idx = 0;                                                       \
-      no_targets = 0;                                                         \
-      pattern = 0;                                                            \
-      also_make_targets = 0;                                                  \
+#define record_waiting_files()						\
+  do									\
+    {									\
+      fi.lineno = tgts_started;						\
+      fi.offset = 0;							\
+      record_files (filenames, also_make_targets, pattern,		\
+		    pattern_percent, depstr,				\
+		    cmds_started, commands, commands_idx, two_colon,	\
+		    prefix, &fi);					\
+      filenames = 0;							\
+      commands_idx = 0;							\
+      pattern = 0;							\
+      also_make_targets = 0;						\
     } while (0)
 
   pattern_percent = 0;
@@ -668,36 +663,25 @@ eval (struct ebuffer *ebuf, int set_default)
          If it is not one, we can stop treating cmd_prefix specially.  */
       if (line[0] == cmd_prefix)
         {
-          if (no_targets)
-            /* Ignore the commands in a rule with no targets.  */
-            continue;
+	  if (ignoring)
+	    /* Yep, this is a shell command, and we don't care.  */
+	    continue;
 
-          /* If there is no preceding rule line, don't treat this line
-             as a command, even though it begins with a recipe prefix.
-             SunOS 4 make appears to behave this way.  */
+	  if (commands_idx == 0)
+	    cmds_started = ebuf->floc.lineno;
 
-          if (filenames != 0)
-            {
-              if (ignoring)
-                /* Yep, this is a shell command, and we don't care.  */
-                continue;
-
-              if (commands_idx == 0)
-                cmds_started = ebuf->floc.lineno;
-
-              /* Append this command line to the line being accumulated.
-                 Skip the initial command prefix character.  */
-              if (linelen + commands_idx > commands_len)
-                {
-                  commands_len = (linelen + commands_idx) * 2;
-                  commands = xrealloc (commands, commands_len);
-                }
-              memcpy (&commands[commands_idx], line + 1, linelen - 1);
-              commands_idx += linelen - 1;
-              commands[commands_idx++] = '\n';
-              continue;
-            }
-        }
+	  /* Append this command line to the line being accumulated.
+	     Skip the initial command prefix character.  */
+	  if (linelen + commands_idx > commands_len)
+	    {
+	      commands_len = (linelen + commands_idx) * 2;
+	      commands = xrealloc (commands, commands_len);
+	    }
+	  memcpy (&commands[commands_idx], line + 1, linelen - 1);
+	  commands_idx += linelen - 1;
+	  commands[commands_idx++] = '\n';
+	  continue;
+	}
 
       /* This line is not a shell command line.  Don't worry about whitespace.
          Get more space if we need it; we don't need to preserve the current
@@ -1040,11 +1024,6 @@ eval (struct ebuffer *ebuf, int set_default)
           case w_dcolon:
           case w_ampcolon:
           case w_ampdcolon:
-            /* We accept and ignore rules without targets for
-               compatibility with SunOS 4 make.  */
-            no_targets = 1;
-            continue;
-
           default:
             break;
           }
@@ -1153,13 +1132,6 @@ eval (struct ebuffer *ebuf, int set_default)
           p2 = colonp + (save == '&');
         }
 
-        if (!filenames)
-          {
-            /* We accept and ignore rules without targets for
-               compatibility with SunOS 4 make.  */
-            no_targets = 1;
-            continue;
-          }
         /* This should never be possible; we handled it above.  */
         assert (*p2 != '\0');
         ++p2;
@@ -1209,9 +1181,6 @@ eval (struct ebuffer *ebuf, int set_default)
         /* Remember the command prefix for this target.  */
         prefix = cmd_prefix;
 
-        /* We have some targets, so don't ignore the following commands.  */
-        no_targets = 0;
-
         /* Expand the dependencies, etc.  */
         if (*lb_next != '\0')
           {
@@ -1241,37 +1210,6 @@ eval (struct ebuffer *ebuf, int set_default)
             else
               break;
           }
-#ifdef _AMIGA
-        /* Here, the situation is quite complicated. Let's have a look
-           at a couple of targets:
-
-           install: dev:make
-
-           dev:make: make
-
-           dev:make:: xyz
-
-           The rule is that it's only a target, if there are TWO :'s
-           OR a space around the :.
-        */
-        if (p && !(ISSPACE (p[1]) || !p[1] || ISSPACE (p[-1])))
-          p = 0;
-#endif
-#ifdef HAVE_DOS_PATHS
-        {
-          int check_again;
-          do {
-            check_again = 0;
-            /* For DOS-style paths, skip a "C:\..." or a "C:/..." */
-            if (p != 0 && (p[1] == '\\' || p[1] == '/') &&
-                isalpha ((unsigned char)p[-1]) &&
-                (p == p2 + 1 || strchr (" \t:(", p[-2]) != 0)) {
-              p = strchr (p + 1, ':');
-              check_again = 1;
-            }
-          } while (check_again);
-        }
-#endif
         if (p != 0)
           {
             struct nameseq *target;
@@ -1996,8 +1934,16 @@ record_files (struct nameseq *filenames, int are_also_makes,
     O (fatal, flocp, _("prerequisites cannot be defined in recipes"));
 
   /* Determine if this is a pattern rule or not.  */
-  name = filenames->name;
-  implicit_percent = find_percent_cached (&name);
+  if (filenames)
+    {
+      name = filenames->name;
+      implicit_percent = find_percent_cached (&name);
+    }
+  else
+    {
+      name = NULL;
+      implicit_percent = "%";
+    }
 
   /* If there's a recipe, set up a struct for it.  */
   if (commands_idx > 0)
@@ -2056,44 +2002,68 @@ record_files (struct nameseq *filenames, int are_also_makes,
       if (pattern != 0)
         O (fatal, flocp, _("mixed implicit and static pattern rules"));
 
-      /* Count the targets to create an array of target names.
-         We already have the first one.  */
-      nextf = filenames->next;
-      free_ns (filenames);
-      filenames = nextf;
+      if (filenames)
+	{
+	  /* Count the targets to create an array of target names.
+	     We already have the first one.  */
+	  nextf = filenames->next;
+	  free_ns (filenames);
+	  filenames = nextf;
 
-      for (c = 1; nextf; ++c, nextf = nextf->next)
-        ;
-      targets = xmalloc (c * sizeof (const char *));
-      target_pats = xmalloc (c * sizeof (const char *));
+	  for (c = 1; nextf; ++c, nextf = nextf->next)
+	    ;
+	  targets = xmalloc (c * sizeof (const char *));
+	  target_pats = xmalloc (c * sizeof (const char *));
 
-      targets[0] = name;
-      target_pats[0] = implicit_percent;
+	  targets[0] = name;
+	  target_pats[0] = implicit_percent;
 
-      c = 1;
-      while (filenames)
-        {
-          name = filenames->name;
-          implicit_percent = find_percent_cached (&name);
+	  c = 1;
+	  while (filenames)
+	    {
+	      name = filenames->name;
+	      implicit_percent = find_percent_cached (&name);
 
-          if (implicit_percent == 0)
-            O (fatal, flocp, _("mixed implicit and normal rules"));
+	      if (implicit_percent == 0)
+		O (fatal, flocp, _("mixed implicit and normal rules"));
 
-          targets[c] = name;
-          target_pats[c] = implicit_percent;
-          ++c;
+	      targets[c] = name;
+	      target_pats[c] = implicit_percent;
+	      ++c;
 
-          nextf = filenames->next;
-          free_ns (filenames);
-          filenames = nextf;
-        }
+	      nextf = filenames->next;
+	      free_ns (filenames);
+	      filenames = nextf;
+	    }
 
-      create_pattern_rule (targets, target_pats, c, two_colon, deps, cmds, 1);
+	  create_pattern_rule (targets, target_pats, c, two_colon, deps, cmds, 1);
+	}
+      else
+	create_pattern_rule (NULL, NULL, 0, two_colon, deps, cmds, 1);
 
       return;
     }
 
+  if (!filenames)
+    {
+      for (struct dep *d = deps; d; d = d->next)
+	{
+	  struct file *f = lookup_file (d->file->name);
+	  char *td_name;
 
+	  if (!f)
+	    OS (error, flocp,
+		_("target '%s' has a teardown rule, but no recipe"), name);
+
+	  f->teardown = xcalloc (sizeof (struct file));
+	  asprintf(&td_name, "%s", d->file->name);
+	  f->teardown->name = td_name;
+	  f->teardown->deps = deps;
+	  f->teardown->cmds = cmds;
+	}
+
+      return;
+    }
   /* Walk through each target and create it in the database.
      We already set up the first target, above.  */
   while (1)
