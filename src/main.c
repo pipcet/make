@@ -206,6 +206,11 @@ int ignore_errors_flag = 0;
 
 int print_data_base_flag = 0;
 
+/* Nonzero means pause after making, but before deleting the
+   intermediate files (-P). */
+
+int pause_flag = 0;
+
 /* Nonzero means don't remake anything; just return a nonzero status
    if the specified targets are not up to date (-q).  */
 
@@ -436,6 +441,7 @@ static const struct command_switch switches[] =
     { 'm', ignore, 0, 0, 0, 0, 0, 0, 0 },
     { 'n', flag, &just_print_flag, 1, 1, 1, 0, 0, "just-print" },
     { 'p', flag, &print_data_base_flag, 1, 1, 0, 0, 0, "print-data-base" },
+    { 'P', flag, &pause_flag, 0, 0, 0, 0, 0, "pause" },
     { 'q', flag, &question_flag, 1, 1, 1, 0, 0, "question" },
     { 'r', flag, &no_builtin_rules_flag, 1, 1, 0, 0, 0, "no-builtin-rules" },
     { 'R', flag, &no_builtin_variables_flag, 1, 1, 0, 0, 0,
@@ -2633,6 +2639,9 @@ main (int argc, char **argv, char **envp)
     if (clock_skew_detected)
       O (error, NILF,
          _("warning:  Clock skew detected.  Your build may be incomplete."));
+
+    if (pause_flag)
+      pause ();
 
     /* Exit.  */
     die (makefile_status);
