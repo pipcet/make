@@ -909,7 +909,7 @@ pattern_search (struct file *file, int archive,
           f->pat_searched = imf->pat_searched;
           f->also_make = imf->also_make;
           f->is_target = 1;
-          f->intermediate = !pat->is_explicit;
+          f->intermediate = 1;
           f->tried_implicit = 1;
 
           imf = lookup_file (pat->pattern);
