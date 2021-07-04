@@ -418,7 +418,7 @@ remove_intermediates_according_to_rule (struct rule *rule, const char *stem, siz
 	  return 0;
 	}
 
-      if (f->intermediate && (f->dontcare || !f->precious)
+      if ((f->dontcare || !f->precious)
 	  && !f->secondary && !f->cmd_target)
 	{
 	  struct dep *new_dep = alloc_dep ();
@@ -462,7 +462,7 @@ static int
 remove_intermediate (struct file *f, int sig)
 {
   int doneany = 0;
-  if (f->intermediate && (f->dontcare || !f->precious)
+  if ((f->dontcare || !f->precious)
       && !f->secondary && !f->cmd_target)
     {
       struct rule *rule;
