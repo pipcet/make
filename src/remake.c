@@ -30,6 +30,8 @@ this program.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <sys/file.h>
 #endif
 
+#include <dirent.h>
+
 #ifdef VMS
 #include <starlet.h>
 #endif
@@ -1480,6 +1482,34 @@ f_mtime (struct file *file, int search)
 }
 
 
+static FILE_TIMESTAMP
+dir_mtime (const char *name, FILE_TIMESTAMP mtime)
+{
+  DIR *dir = opendir (name);
+  struct dirent *de;
+  if (!dir)
+    return mtime;
+
+  while ((de = readdir (dir)) != NULL)
+    {
+      if (strcmp (de->d_name, ".") && strcmp (de->d_name, ".."))
+	{
+	  char *path;
+	  FILE_TIMESTAMP mtime2;
+	  asprintf (&path, "%s/%s", name, de->d_name);
+	  mtime2 = name_mtime (path);
+	  free (path);
+
+	  if (mtime2 > mtime)
+	    mtime = mtime2;
+	}
+    }
+
+  closedir (dir);
+  return mtime;
+}
+
+
 /* Return the mtime of the file or archive-member reference NAME.  */
 
 /* First, we check with stat().  If the file does not exist, then we return
@@ -1542,7 +1572,9 @@ name_mtime (const char *name)
 #else
   EINTRLOOP (e, stat (name, &st));
 #endif
-  if (e == 0)
+  if (e == 0 && S_ISDIR (st.st_mode))
+    return dir_mtime (name, FILE_TIMESTAMP_STAT_MODTIME (name, st));
+  else if (e == 0)
     mtime = FILE_TIMESTAMP_STAT_MODTIME (name, st);
   else if (errno == ENOENT || errno == ENOTDIR)
     mtime = NONEXISTENT_MTIME;
