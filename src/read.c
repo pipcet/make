@@ -590,7 +590,7 @@ eval (struct ebuffer *ebuf, int set_default)
       fi.lineno = tgts_started;						\
       fi.offset = 0;							\
       record_files (filenames, also_make_targets, pattern,		\
-		    pattern_percent, depstr,				\
+		    pattern_percent, depstr ? strdup(depstr) : NULL,	\
 		    cmds_started, commands, commands_idx, two_colon,	\
 		    prefix, &fi);					\
       filenames = 0;							\

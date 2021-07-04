@@ -80,6 +80,9 @@ lookup_file (const char *name)
 #endif
 #endif
 
+  if (*name == 0)
+    return NULL;
+
   assert (*name != '\0');
 
   /* This is also done in parse_file_seq, so this is redundant
@@ -363,6 +366,7 @@ match_percent (const char *pattern, const char *name, const char **stemp, size_t
   size_t np = strlen (pattern);
   size_t nn = strlen (name);
   size_t i0, i1;
+  *stemp = name;
   for (i0 = 0; i0 < np; i0++)
     {
       *stemp = name + i0;
@@ -401,7 +405,6 @@ remove_intermediates_according_to_rule (struct rule *rule, const char *stem, siz
 	path = strdup (dep->name);
       else
 	{
-
 	  asprintf (&path, "%.*s%.*s%s",
 		    (int)(percent - dep->name), dep->name,
 		    (int)(stem_n), stem,
@@ -440,11 +443,15 @@ remove_intermediates_according_to_rule (struct rule *rule, const char *stem, siz
 	}
     }
 
-  teardown = xcalloc (sizeof (struct file));
-  teardown->name = path;
-  teardown->deps = new_deps;
-  teardown->cmds = rule->cmds;
-  execute_file_commands (teardown);
+  if (rule->cmds)
+    {
+      teardown = xcalloc (sizeof (struct file));
+      teardown->name = path;
+      teardown->deps = new_deps;
+      teardown->cmds = rule->cmds;
+      execute_file_commands (teardown);
+      free (teardown);
+    }
 
   while (new_deps)
     {
@@ -452,7 +459,6 @@ remove_intermediates_according_to_rule (struct rule *rule, const char *stem, siz
       new_deps = new_dep->next;
       free (new_dep);
     }
-  free (teardown);
   free (path);
 
   return 0;
